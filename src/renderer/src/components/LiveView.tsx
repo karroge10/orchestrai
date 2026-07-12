@@ -1,0 +1,3 @@
+import { Camera, Monitor } from 'lucide-react'
+const imageUrl=(path:string)=>`companion-file://local/${encodeURIComponent(path)}`
+export function LiveView({path,onCapture}:{path?:string;onCapture:()=>void}){return <section className="live-view"><div className="panel-title"><span><Monitor size={15}/>Live view</span><button onClick={onCapture}><Camera size={14}/>Capture</button></div>{path?<img src={imageUrl(path)} alt="Latest desktop capture"/>:<div className="screen-placeholder"><Monitor size={32}/><span>No screenshot captured</span><small>Capture is local and permission-based.</small></div>}</section>}

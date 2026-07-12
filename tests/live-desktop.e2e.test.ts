@@ -1,0 +1,21 @@
+import { spawn,execFileSync,type ChildProcess } from 'node:child_process'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { afterAll,beforeAll,describe,expect,it,vi } from 'vitest'
+import { cleanupFixture,createFixture,type Fixture } from '../src/main/e2e/fixtureHarness'
+import { runTool } from '../src/main/tools/registry'
+
+const title='OrchestrAI E2E Fixture'
+vi.setConfig({testTimeout:15_000})
+let fixture:Fixture;let app:ChildProcess;let revision='';let screenshot=''
+const context=()=>({taskId:'live-desktop',e2e:{enabled:true as const,fixtureRoot:fixture.root,allowedProcessIds:app?.pid?[app.pid]:[]}})
+async function inspect(){let last='';for(let i=0;i<30;i++){const r=await runTool('desktop.inspect',{windowTitle:title},context());if(r.ok)return r;last=r.error??'';await new Promise(resolve=>setTimeout(resolve,250))}throw new Error(`Live desktop fixture did not become accessible: ${last}`)}
+beforeAll(async()=>{fixture=await createFixture();const script=join(process.cwd(),'tests/fixtures/desktop-app.ps1');app=spawn('powershell.exe',['-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',script],{windowsHide:false,stdio:'ignore'});const r=await inspect();revision=String((r.data as Record<string,unknown>).revision)},30_000)
+afterAll(async()=>{if(screenshot){const output=join(process.cwd(),'reports','screenshots','live-desktop-settings.png');await fs.mkdir(join(output,'..'),{recursive:true});await fs.copyFile(screenshot,output)}if(app?.pid){try{process.kill(app.pid)}catch{/* already closed */}}await cleanupFixture(fixture.root)})
+
+describe('live Windows UI Automation E2E',()=>{
+  it('observes a real harmless window and its active tab',async()=>{const r=await inspect();expect(r.data).toMatchObject({title,activeTab:'Home'});revision=String((r.data as Record<string,unknown>).revision)})
+  it('selects Settings with approval and observes the real disabled Save and password metadata',async()=>{expect((await runTool('desktop.selectTab',{windowTitle:title,tab:'Settings',observedRevision:revision},context())).error).toBe('Approval required');const r=await runTool('desktop.selectTab',{windowTitle:title,tab:'Settings',observedRevision:revision},context(),true);expect(r.ok).toBe(true);expect(r.data).toMatchObject({activeTab:'Settings',passwordDetected:true,saveEnabled:false});revision=String((r.data as Record<string,unknown>).revision)})
+  it('sets a normal field structurally, captures evidence, and refuses the actual password field',async()=>{const r=await runTool('desktop.setField',{windowTitle:title,field:'Normal test field',text:'Companion test',observedRevision:revision},context(),true);expect(r.ok).toBe(true);expect(r.data).toMatchObject({normalField:'Companion test'});revision=String((r.data as Record<string,unknown>).revision);const b=(r.data as {windowBounds:{x:number;y:number;width:number;height:number}}).windowBounds;screenshot=join(fixture.root,'live-desktop-settings.png');execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Add-Type -AssemblyName System.Drawing;$b=New-Object Drawing.Bitmap(${Math.round(b.width)},${Math.round(b.height)});$g=[Drawing.Graphics]::FromImage($b);$g.CopyFromScreen(${Math.round(b.x)},${Math.round(b.y)},0,0,$b.Size);$b.Save('${screenshot.replaceAll("'","''")}',[Drawing.Imaging.ImageFormat]::Png);$g.Dispose();$b.Dispose()`],{windowsHide:true});const refused=await runTool('desktop.setField',{windowTitle:title,field:'Simulated password field',text:'synthetic',observedRevision:revision},context(),true);expect(refused.error).toContain('password')})
+  it('invalidates the observation after the real window moves',async()=>{execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class W{[DllImport("user32.dll")]public static extern bool SetWindowPos(IntPtr h,IntPtr a,int x,int y,int w,int z,uint f);}' ;$p=Get-Process -Id ${app.pid};[W]::SetWindowPos($p.MainWindowHandle,[IntPtr]::Zero,40,40,680,500,0)|Out-Null`],{windowsHide:true});await new Promise(resolve=>setTimeout(resolve,250));const stale=await runTool('desktop.selectTab',{windowTitle:title,tab:'Home',observedRevision:revision},context(),true);expect(stale.error).toContain('Stale')})
+})

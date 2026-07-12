@@ -1,0 +1,2 @@
+import type { Finding } from '../../../shared/types'
+export function FindingsPanel({findings}:{findings:Finding[]}){if(!findings.length)return <div className="empty-panel">Findings will appear as checks finish.</div>;return <div className="findings">{findings.map((f)=><article key={f.id} className={`finding ${f.severity}`}><div className="severity">{f.severity}</div><h3>{f.title}</h3><p>{f.description}</p>{f.evidence&&<pre>{f.evidence}</pre>}</article>)}</div>}

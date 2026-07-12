@@ -1,0 +1,6 @@
+import { create } from 'zustand'
+import type { Task } from '../../../shared/types'
+
+interface State {tasks:Task[];selectedId?:string;loading:boolean;init():Promise<void>;select(id:string):void;upsert(task:Task):void;run(input:string):Promise<void>;deleteTask(id:string):Promise<void>;clearTasks():Promise<void>}
+let initialized=false
+export const useTaskStore=create<State>((set,get)=>({tasks:[],loading:false,async init(){if(initialized)return;initialized=true;const tasks=await window.companion.getTasks();set({tasks,selectedId:tasks[0]?.id});window.companion.onTaskUpdate((task)=>get().upsert(task))},select:(selectedId)=>set({selectedId}),upsert:(task)=>set((s)=>({tasks:[task,...s.tasks.filter((x)=>x.id!==task.id)],selectedId:s.selectedId??task.id})),async run(input){if(!input.trim())return;set({loading:true});try{const task=await window.companion.runTask(input.trim());get().upsert(task);set({selectedId:task.id})}catch(error){alert(error instanceof Error?error.message:String(error))}finally{set({loading:false})}},async deleteTask(id){await window.companion.deleteTask(id);set((state)=>{const tasks=state.tasks.filter((task)=>task.id!==id);return{tasks,selectedId:state.selectedId===id?tasks[0]?.id:state.selectedId}})},async clearTasks(){await window.companion.clearTaskHistory();set({tasks:[],selectedId:undefined})}}))
