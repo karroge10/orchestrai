@@ -14,7 +14,7 @@
     "smoke:packaged": "powershell -NoProfile -ExecutionPolicy Bypass -File tests/packaged-smoke.ps1",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude tests/local-provider.integration.test.ts",
+    "test": "vitest run --exclude tests/local-provider.integration.test.ts --exclude tests/*.e2e.test.ts --exclude tests/synthetic-e2e.test.ts",
     "test:local": "vitest run tests/local-provider.integration.test.ts --testTimeout=180000",
     "test:e2e": "vitest run tests/synthetic-e2e.test.ts tests/live-desktop.e2e.test.ts tests/live-browser.e2e.test.ts tests/diagnostics.e2e.test.ts --testTimeout=120000 --hookTimeout=30000",
     "report": "node scripts/finalize-report.mjs",
